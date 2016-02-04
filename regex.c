@@ -326,14 +326,18 @@ typedef unsigned long int uintptr_t;
 #   ifdef __GNUC__
 #    define alloca __builtin_alloca
 #   else /* not __GNUC__ */
-#    if HAVE_ALLOCA_H
-#     include <alloca.h>
+#    if HAVE_ALLOCA_H && defined(_MSC_VER)
+#     include <malloc.h>
 #    endif /* HAVE_ALLOCA_H */
 #   endif /* not __GNUC__ */
 
 #  endif /* not alloca */
 
-#  define REGEX_ALLOCATE alloca
+#ifdef _MSC_VER
+#   define REGEX_ALLOCATE _alloca
+#else
+#   define REGEX_ALLOCATE alloca
+#endif
 
 /* Assumes a `char *destination' variable.  */
 #  define REGEX_REALLOCATE(source, osize, nsize)			\
@@ -366,7 +370,11 @@ typedef unsigned long int uintptr_t;
 
 #  else /* not REGEX_MALLOC */
 
+#ifdef _MSC_VER
+#   define REGEX_ALLOCATE_STACK _alloca
+#else
 #   define REGEX_ALLOCATE_STACK alloca
+#endif
 
 #   define REGEX_REALLOCATE_STACK(source, osize, nsize)			\
    REGEX_REALLOCATE (source, osize, nsize)
@@ -1337,8 +1345,7 @@ reg_syntax_t re_syntax_options;
    defined in regex.h.  We return the old syntax.  */
 
 reg_syntax_t
-re_set_syntax (syntax)
-    reg_syntax_t syntax;
+re_set_syntax ( reg_syntax_t syntax)
 {
   reg_syntax_t ret = re_syntax_options;
 
@@ -4414,9 +4421,8 @@ PREFIX(at_endline_loc_p) (p, pend, syntax)
    false if it's not.  */
 
 static boolean
-group_in_compile_stack (compile_stack, regnum)
-    compile_stack_type compile_stack;
-    regnum_t regnum;
+group_in_compile_stack (compile_stack_type compile_stack,
+    regnum_t regnum)
 {
   int this_element;
 
@@ -4640,8 +4646,7 @@ truncate_wchar (c)
 }
 #endif /* WCHAR */
 
-static int
-PREFIX(re_compile_fastmap) (bufp)
+static int PREFIX(re_compile_fastmap) (bufp)
      struct re_pattern_buffer *bufp;
 {
   int j, k;
@@ -4687,13 +4692,10 @@ PREFIX(re_compile_fastmap) (bufp)
   bufp->fastmap_accurate = 1;	    /* It will be when we're done.  */
   bufp->can_be_null = 0;
 
-  while (1)
-    {
-      if (p == pend || *p == succeed)
-	{
-	  /* We have reached the (effective) end of pattern.  */
-	  if (!FAIL_STACK_EMPTY ())
-	    {
+  while (1) {
+    if (p == pend || *p == succeed) {
+	    /* We have reached the (effective) end of pattern.  */
+	    if (!FAIL_STACK_EMPTY ()) {
 	      bufp->can_be_null |= path_can_be_null;
 
 	      /* Reset for next path.  */
@@ -4832,26 +4834,26 @@ PREFIX(re_compile_fastmap) (bufp)
 #endif /* emacs */
 
 
-        case no_op:
-        case begline:
-        case endline:
+  case no_op:
+  case begline:
+  case endline:
 	case begbuf:
 	case endbuf:
 	case wordbound:
 	case notwordbound:
 	case wordbeg:
 	case wordend:
-        case push_dummy_failure:
-          continue;
+  case push_dummy_failure:
+    continue;
 
 
 	case jump_n:
-        case pop_failure_jump:
+  case pop_failure_jump:
 	case maybe_pop_jump:
 	case jump:
-        case jump_past_alt:
+  case jump_past_alt:
 	case dummy_failure_jump:
-          EXTRACT_NUMBER_AND_INCR (j, p);
+    EXTRACT_NUMBER_AND_INCR (j, p);
 	  p += j;
 	  if (j > 0)
 	    continue;
@@ -4861,8 +4863,7 @@ PREFIX(re_compile_fastmap) (bufp)
              `on_failure_jump' or `succeed_n'.  Just treat it like an
              ordinary jump.  For a * loop, it has pushed its failure
              point already; if so, discard that as redundant.  */
-          if ((re_opcode_t) *p != on_failure_jump
-	      && (re_opcode_t) *p != succeed_n)
+    if ((re_opcode_t) *p != on_failure_jump && (re_opcode_t) *p != succeed_n)
 	    continue;
 
           p++;
@@ -4960,16 +4961,12 @@ PREFIX(re_compile_fastmap) (bufp)
 
 #else /* not INSIDE_RECURSION */
 
-int
-re_compile_fastmap (bufp)
-     struct re_pattern_buffer *bufp;
-{
+int re_compile_fastmap (struct re_pattern_buffer *bufp) {
 # ifdef MBS_SUPPORT
   if (MB_CUR_MAX != 1)
     return wcs_re_compile_fastmap(bufp);
-  else
 # endif
-    return byte_re_compile_fastmap(bufp);
+  return byte_re_compile_fastmap(bufp);
 } /* re_compile_fastmap */
 #ifdef _LIBC
 weak_alias (__re_compile_fastmap, re_compile_fastmap)
@@ -4989,13 +4986,7 @@ weak_alias (__re_compile_fastmap, re_compile_fastmap)
    PATTERN_BUFFER will allocate its own register data, without
    freeing the old data.  */
 
-void
-re_set_registers (bufp, regs, num_regs, starts, ends)
-    struct re_pattern_buffer *bufp;
-    struct re_registers *regs;
-    unsigned num_regs;
-    regoff_t *starts, *ends;
-{
+void re_set_registers ( struct re_pattern_buffer *bufp, struct re_registers *regs, unsigned num_regs, regoff_t *starts, regoff_t *ends) {
   if (num_regs)
     {
       bufp->regs_allocated = REGS_REALLOCATE;
@@ -5019,15 +5010,8 @@ weak_alias (__re_set_registers, re_set_registers)
 /* Like re_search_2, below, but only one string is specified, and
    doesn't let you say where to stop matching.  */
 
-int
-re_search (bufp, string, size, startpos, range, regs)
-     struct re_pattern_buffer *bufp;
-     const char *string;
-     int size, startpos, range;
-     struct re_registers *regs;
-{
-  return re_search_2 (bufp, NULL, 0, string, size, startpos, range,
-		      regs, size);
+int re_search ( struct re_pattern_buffer *bufp, const char *string, int size, int startpos,int  range, struct re_registers *regs) {
+  return re_search_2 (bufp, NULL, 0, string, size, startpos, range, regs, size);
 }
 #ifdef _LIBC
 weak_alias (__re_search, re_search)
@@ -5055,24 +5039,12 @@ weak_alias (__re_search, re_search)
    found, -1 if no match, or -2 if error (such as failure
    stack overflow).  */
 
-int
-re_search_2 (bufp, string1, size1, string2, size2, startpos, range, regs, stop)
-     struct re_pattern_buffer *bufp;
-     const char *string1, *string2;
-     int size1, size2;
-     int startpos;
-     int range;
-     struct re_registers *regs;
-     int stop;
-{
+int re_search_2 (struct re_pattern_buffer *bufp, const char *string1,  const char *string2, int size1, int size2, int startpos, int range, struct re_registers *regs, int stop) {
 # ifdef MBS_SUPPORT
   if (MB_CUR_MAX != 1)
-    return wcs_re_search_2 (bufp, string1, size1, string2, size2, startpos,
-			    range, regs, stop);
-  else
+    return wcs_re_search_2 (bufp, string1, size1, string2, size2, startpos, range, regs, stop);
 # endif
-    return byte_re_search_2 (bufp, string1, size1, string2, size2, startpos,
-			     range, regs, stop);
+  return byte_re_search_2 (bufp, string1, size1, string2, size2, startpos, range, regs, stop);
 } /* re_search_2 */
 #ifdef _LIBC
 weak_alias (__re_search_2, re_search_2)
@@ -5119,8 +5091,7 @@ weak_alias (__re_search_2, re_search_2)
 
 
 static int
-PREFIX(re_search_2) (bufp, string1, size1, string2, size2, startpos, range,
-		     regs, stop)
+PREFIX(re_search_2) (bufp, string1, size1, string2, size2, startpos, range, regs, stop)
      struct re_pattern_buffer *bufp;
      const char *string1, *string2;
      int size1, size2;
@@ -5510,11 +5481,11 @@ PREFIX(re_search_2) (bufp, string1, size1, string2, size2, startpos, range,
 /* re_match is like re_match_2 except it takes only a single string.  */
 
 int
-re_match (bufp, string, size, pos, regs)
-     struct re_pattern_buffer *bufp;
-     const char *string;
-     int size, pos;
-     struct re_registers *regs;
+re_match (
+     struct re_pattern_buffer *bufp,
+     const char *string,
+     int size, int pos,
+     struct re_registers *regs)
 {
   int result;
 # ifdef MBS_SUPPORT
@@ -5568,13 +5539,13 @@ static int PREFIX(bcmp_translate) _RE_ARGS ((const CHAR_T *s1, const CHAR_T *s2,
    matched substring.  */
 
 int
-re_match_2 (bufp, string1, size1, string2, size2, pos, regs, stop)
-     struct re_pattern_buffer *bufp;
-     const char *string1, *string2;
-     int size1, size2;
-     int pos;
-     struct re_registers *regs;
-     int stop;
+re_match_2 (
+     struct re_pattern_buffer *bufp,
+     const char *string1, const char *string2,
+     int size1, int size2,
+     int pos,
+     struct re_registers *regs,
+     int stop)
 {
   int result;
 # ifdef MBS_SUPPORT
@@ -7903,10 +7874,9 @@ PREFIX(bcmp_translate) (s1, s2, len, translate)
    We call regex_compile to do the actual compilation.  */
 
 const char *
-re_compile_pattern (pattern, length, bufp)
-     const char *pattern;
-     size_t length;
-     struct re_pattern_buffer *bufp;
+re_compile_pattern (const char *pattern,
+     size_t length,
+     struct re_pattern_buffer *bufp)
 {
   reg_errcode_t ret;
 
@@ -8052,12 +8022,7 @@ re_exec (s)
    It returns 0 if it succeeds, nonzero if it doesn't.  (See regex.h for
    the return codes and their meanings.)  */
 
-int
-regcomp (preg, pattern, cflags)
-    regex_t *preg;
-    const char *pattern;
-    int cflags;
-{
+int regcomp (regex_t *preg, const char *pattern, int cflags) {
   reg_errcode_t ret;
   reg_syntax_t syntax
     = (cflags & REG_EXTENDED) ?
@@ -8148,14 +8113,7 @@ weak_alias (__regcomp, regcomp)
 
    We return 0 if we find a match and REG_NOMATCH if not.  */
 
-int
-regexec (preg, string, nmatch, pmatch, eflags)
-    const regex_t *preg;
-    const char *string;
-    size_t nmatch;
-    regmatch_t pmatch[];
-    int eflags;
-{
+int regexec (const regex_t *preg, const char *string, size_t nmatch, regmatch_t pmatch[], int eflags) {
   int ret;
   struct re_registers regs;
   regex_t private_preg;
@@ -8215,13 +8173,7 @@ weak_alias (__regexec, regexec)
 /* Returns a message corresponding to an error code, ERRCODE, returned
    from either regcomp or regexec.   We don't use PREG here.  */
 
-size_t
-regerror (errcode, preg, errbuf, errbuf_size)
-    int errcode;
-    const regex_t *preg;
-    char *errbuf;
-    size_t errbuf_size;
-{
+size_t regerror (int errcode, const regex_t *preg, char *errbuf, size_t errbuf_size) {
   const char *msg;
   size_t msg_size;
 
@@ -8263,8 +8215,7 @@ weak_alias (__regerror, regerror)
 /* Free dynamically allocated space used by PREG.  */
 
 void
-regfree (preg)
-    regex_t *preg;
+regfree (regex_t *preg)
 {
   if (preg->buffer != NULL)
     free (preg->buffer);
